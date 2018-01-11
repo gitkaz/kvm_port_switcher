@@ -64,7 +64,7 @@ def wait_user_input(max_num):
         if input_str == "Q":
             sys.exit(0)
         if (input_str.isdigit()) and (0 <= int(input_str) <= max_num):
-                return int(input_str)
+            return int(input_str)
         else:
             print("Input value is wrong.")
             input_str = input("Input Number. ([0..%s] Q=Quit) >" % max_num)
@@ -319,7 +319,7 @@ def get_XML_ETree(obj):
 def show_doms_and_nics(domains):
     print("--------------------------")
     list_number = 0
-    for i, domain in enumerate(domains):
+    for domain in domains:
         interfaces = get_domain_interfaces(domain)
 
         if is_domain_active(domain) is True:
@@ -337,7 +337,7 @@ def show_network_and_portgroups(networks):
     print("--------------------------")
 
     list_number = 0
-    for i, network in enumerate(networks):
+    for network in networks:
         network_xmlroot = get_XML_ETree(network)
         network_name = network_xmlroot.find("name").text
         print("network '%s'" % network_name)
@@ -443,7 +443,8 @@ def parse_args():
     parser = argparse.ArgumentParser(description="KVM virtual machine interface switcher")
     parser.add_argument("-c", "--connect", \
                         default='qemu:///system', \
-                        help="Hypervisor(libvirtd) connection URI. default is 'qemu:///system'", \
+                        help="Hypervisor(libvirtd) connection URI. \
+                              default is 'qemu:///system'", \
                         action="store")
 
     parser.add_argument("-I", "--Interactive", \
@@ -451,7 +452,7 @@ def parse_args():
                         action="store_true")
 
     parser.add_argument("-d", "--domain", \
-                        help="Show domain(virtual machine) and network insterface list of connected hypervisor", \
+                        help="Show domain and network insterface list of connected hypervisor", \
                         action="store_true")
 
     parser.add_argument("-n", "--network", \
@@ -459,7 +460,8 @@ def parse_args():
                         action="store_true")
 
     parser.add_argument("-s", "--set", \
-                        help="Set mode. This mode configure your hypervisor configuration. use with -i, -p and --dry.", \
+                        help="Set mode. This mode configure your hypervisor \
+                              configuration. use with -i, -p and --dry.", \
                         action="store_true")
 
     parser.add_argument("-i", "--interface", \
@@ -474,7 +476,8 @@ def parse_args():
                         default=0)
 
     parser.add_argument("--dry", \
-                        help="Don't update real configuration. Just display before and after Interface XML", \
+                        help="Don't update real configuration. \
+                              Just display before and after Interface XML", \
                         action="store_true")
 
     args = parser.parse_args()
