@@ -46,10 +46,9 @@ def get_nic(target_dom, target_nic_id):
 
 
 def interacive_commit_comfirm():
-    print ("Are you confirm this configuration change?")
-    print ("")
+    print("Are you confirm this configuration change?")
+    print("")
     input_str = input(">(Y/n)")
-
     return bool(input_str == "Y")
 
 
@@ -59,26 +58,34 @@ def interactive_compare(nic_et, new_interface):
     show_before_and_after_definition(nic_et, new_interface)
 
 
+def wait_user_input(max_num):
+    input_str = input("Input Number. ([0..%s] Q=Quit) >" % max_num)
+    while True:
+        if input_str == "Q":
+            sys.exit(0)
+        if (input_str.isdigit()) and (0 <= int(input_str) <= max_num):
+                return int(input_str)
+        else:
+            print("Input value is wrong.")
+            input_str = input("Input Number. ([0..%s] Q=Quit) >" % max_num)
+
+
 def interactive_choise_portgroup(networks):
     print("Which PortGroup to connect?")
     print("")
 
-    show_network_and_portgroups(networks)
-    input_str = input("Input Number. (Q=Quit) >")
-    if input_str == "Q" : sys.exit(0)
-
-    return input_str
+    max_num = show_network_and_portgroups(networks) - 1
+    input_num = wait_user_input(max_num)
+    return input_num
 
 
 def interactive_choise_nic(domains):
     print("Which Interface choose?")
     print("")
 
-    show_doms_and_nics(domains)
-    input_str = input("Input Number. (Q=Quit) >")
-    if input_str == "Q" : sys.exit(0)
-
-    return input_str
+    max_num = show_doms_and_nics(domains) - 1
+    input_num = wait_user_input(max_num)
+    return input_num
 
 
 def interactive_mode_end_judge(connection):
@@ -103,26 +110,27 @@ def interactive_mode(connection, domains, networks):
             lookup_dom_and_nic_definition_from_number(domains, input_str)
 
         if is_domain_active(domain) is True:
-            confirm_live_dettach_and_attach()
+            live_DA_permit = confirm_live_detach_and_attach()
 
-        os.system("clear")
-        input_str = interactive_choise_portgroup(networks)
-        (network, portgroup_et) = \
-            lookup_network_and_portgroup_definition_from_number(networks, input_str)
+        if is_domain_active(domain) is False or live_DA_permit is True:
+            os.system("clear")
+            input_str = interactive_choise_portgroup(networks)
+            (network, portgroup_et) = \
+                lookup_network_and_portgroup_definition_from_number(networks, input_str)
 
-        os.system("clear")
-        if is_domain_active(domain) is True:
-            new_interface = create_interface_definition_live \
-                (nic_et, network, portgroup_et)
-        else:
-            new_interface = create_interface_definition_static \
-                (nic_et, network, portgroup_et)
+            os.system("clear")
+            if is_domain_active(domain) is True:
+                new_interface = create_interface_definition_live \
+                    (nic_et, network, portgroup_et)
+            else:
+                new_interface = create_interface_definition_static \
+                    (nic_et, network, portgroup_et)
 
-        interactive_compare(nic_et, new_interface)
+            interactive_compare(nic_et, new_interface)
 
-        commit = interacive_commit_comfirm()
-        if commit is True:
-            update_domain_interface(domain, nic_et, new_interface)
+            commit = interacive_commit_comfirm()
+            if commit is True:
+                update_domain_interface(domain, nic_et, new_interface)
 
         interactive_mode_end_judge(connection)
 
@@ -221,13 +229,11 @@ def update_domain_interface(domain, nic_et, new_interface):
 def is_domain_active(dom):
     return bool(dom.state()[0] == 1)
 
-def confirm_live_dettach_and_attach():
+def confirm_live_detach_and_attach():
     print("Selected dommain is running. Live detach and attach VM interface sometimes DANGEROUS.")
-    print("Do you REALLY procced? [y/n]")
-    if input(">") == "y":
-        return True
-    else:
-        sys.exit(0)
+    print("Do you REALLY procced? [Y/n]")
+    input_str = input(">")
+    return bool(input_str == "Y")
 
 
 def lookup_network_and_portgroup_definition_from_number(networks, number_str):
@@ -265,33 +271,43 @@ def lookup_dom_and_nic_definition_from_number(domains, number_str):
     sys.exit(1)
 
 
-def print_dom_nics(i, dom_nics):
-    for nic in dom_nics:
-        (mac, portgroup), = nic.items()
-        print("  i[%i]: %s (%s) " % (i, portgroup, mac))
-        i = i + 1
-    return i
+def print_interfaces_list(list_number, interfaces):
+    for i, interface in enumerate(interfaces):
+        mac_et = interface.find("mac")
+        mac_address = mac_et.get("address")
 
+        source_et = interface.find("source")
+        portgroup = source_et.get("portgroup")
+        print("  i[%i]: %s (%s) " % (list_number+i, portgroup, mac_address))
+
+    list_number = list_number + len(interfaces)
+    return list_number
+
+def print_portgroups_list(list_number, portgroups):
+    for i, portgroup in enumerate(portgroups):
+        vlans = portgroup.findall("vlan")
+        for vlan in vlans:
+            vlan_text = ""
+            if "trunk" in vlan.attrib and vlan.get("trunk") == "yes":
+                vlan_text = "trunk: "
+
+            for tag in vlan.findall("tag"):
+                vlan_text = vlan_text + tag.get("id") + " "
+
+            vlan_text = vlan_text.rstrip()
+
+        print("  p[%i]: %s (%s)" % (list_number+i, portgroup.get("name"), vlan_text))
+
+    list_number = list_number + len(portgroups)
+    return list_number
 
 def get_domain_interfaces(domain):
     dom_xmlroot = get_XML_ETree(domain)
-
-    nics = []
-
     devices = dom_xmlroot.find("devices")
-
-    for interface in devices.iter("interface"):
-        mac = interface.find("mac")
-        mac_address = mac.attrib["address"]
-
-        source = interface.find("source")
-        portgroup = source.attrib["portgroup"]
-
-        nic = {}
-        nic[mac_address] = portgroup
-        nics.append(nic)
-
-    return nics
+    interfaces = []
+    for interface in devices.findall("interface"):
+        interfaces.append(interface)
+    return interfaces
 
 
 def get_XML_ETree(obj):
@@ -302,45 +318,35 @@ def get_XML_ETree(obj):
 
 def show_doms_and_nics(domains):
     print("--------------------------")
-    i = 0
-    for domain in domains:
-        domain_nics = get_domain_interfaces(domain)
+    list_number = 0
+    for i, domain in enumerate(domains):
+        interfaces = get_domain_interfaces(domain)
 
         if is_domain_active(domain) is True:
             print("domain '%s' (running)" % domain.name())
         else:
             print("domain '%s'" % domain.name())
 
-        i = print_dom_nics(i, domain_nics)
+        list_number = print_interfaces_list(list_number, interfaces)
     print("--------------------------")
+
+    return list_number
 
 
 def show_network_and_portgroups(networks):
     print("--------------------------")
 
-    i = 0
-    for network in networks:
+    list_number = 0
+    for i, network in enumerate(networks):
         network_xmlroot = get_XML_ETree(network)
         network_name = network_xmlroot.find("name").text
         print("network '%s'" % network_name)
 
         portgroups = network_xmlroot.findall("portgroup")
-
-        for portgroup in portgroups:
-            vlans = portgroup.findall("vlan")
-            for vlan in vlans:
-                if "trunk" in vlan.attrib and vlan.attrib["trunk"] == "yes":
-                    vlan_text = "trunk: "
-                else:
-                    vlan_text = ""
-                for tag in vlan.findall("tag"):
-                    vlan_text = vlan_text + tag.attrib["id"] + " "
-                vlan_text = vlan_text.rstrip()
-
-            print("  p[%i]: %s (%s)" % (i, portgroup.attrib["name"], vlan_text))
-            i = i+1
-
+        list_number = print_portgroups_list(list_number, portgroups)
     print("--------------------------")
+
+    return list_number
 
 
 def get_all_doms(connection):
@@ -391,7 +397,11 @@ def commandline_set_mode(domains, networks, args):
         lookup_network_and_portgroup_definition_from_number(networks, args.portgroup)
 
     if is_domain_active(domain) is True:
-        confirm_live_dettach_and_attach()
+        if confirm_live_detach_and_attach() == True:
+            pass
+        else:
+            print("Live detach and attach Canceled.")
+            sys.exit(0)
 
         new_interface = create_interface_definition_live \
             (nic_et, network, portgroup_et)
@@ -432,10 +442,9 @@ def commandline_mode(domains, networks, args):
 def parse_args():
     parser = argparse.ArgumentParser(description="KVM virtual machine interface switcher")
     parser.add_argument("-c", "--connect", \
-
-                        help="Hypervisor(libvirtd) connection URI. always required.", \
-                        action="store", \
-                        required="True")
+                        default='qemu:///system', \
+                        help="Hypervisor(libvirtd) connection URI. default is 'qemu:///system'", \
+                        action="store")
 
     parser.add_argument("-I", "--Interactive", \
                         help="Enable interactive mode", \
@@ -454,10 +463,12 @@ def parse_args():
                         action="store_true")
 
     parser.add_argument("-i", "--interface", \
+                        type=int, \
                         help="Specify modify interface by number", \
                         action="store")
 
     parser.add_argument("-p", "--portgroup", \
+                        type=int, \
                         help="Specify target portgroup by number", \
                         action="store", \
                         default=0)
